@@ -7,7 +7,7 @@
     "Receive": 1,
     "Mediate": 1,
     "webRTC": 1,
-    "toDevice": 1
+    "toDevice": 0
   },
   "autoSettle": true
 }
