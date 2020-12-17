@@ -34,7 +34,7 @@ import { RaidenState } from '../../state';
 import { getUserPresence } from '../../utils/matrix';
 import { pluckDistinct, retryWhile } from '../../utils/rx';
 import { matrixPresence } from '../actions';
-import { channelMonitored } from '../../channels/actions';
+import { channelMonitored, channelOpen } from '../../channels/actions';
 import { parseCaps, stringifyCaps } from '../utils';
 import { intervalFromConfig } from '../../config';
 
@@ -346,5 +346,36 @@ export function matrixUpdateCapsEpic(
         ignoreElements(),
       ),
     ),
+  );
+}
+
+/**
+ * Trigger a presence upload on certain events, so it's correctly picked up by PFS
+ *
+ * @param action$ - Observable of RaidenActions
+ * @param state$ - Observable of RaidenStates
+ * @param deps - Epics dependencies
+ * @param deps.matrix$ - MatrixClient async subject
+ * @param deps.config$ - Config object
+ * @returns Observable which never emits
+ */
+export function matrixPresenceReload(
+  action$: Observable<RaidenAction>,
+  {}: Observable<RaidenState>,
+  { matrix$, config$ }: RaidenEpicDeps,
+): Observable<never> {
+  return action$.pipe(
+    filter(isActionOf([channelOpen.success])),
+    filter((action) => !!action.payload.confirmed),
+    mergeMap(() =>
+      matrix$.pipe(
+        mergeMap(async (matrix) => {
+          // trigger immediate presence update on servers
+          await matrix.setPresence({ presence: 'online', status_msg: Date.now().toString() });
+        }),
+        retryWhile(intervalFromConfig(config$), { onErrors: [429] }),
+      ),
+    ),
+    ignoreElements(),
   );
 }
